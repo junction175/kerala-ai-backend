@@ -26,10 +26,10 @@ CRITICAL INSTRUCTIONS:
    - Class 10 = പത്താം ക്ലാസ്സ്
 5. Strictly DO NOT use Hindi, Arabic, Bengali, or broken Malayalam.`;
 
-        // 100% ഉറപ്പായും വർക്ക് ചെയ്യുന്ന Groq മോഡലുകൾ
+        // Groq-ലെ നിലവിലെ ലൈവ് മോഡലുകൾ
         const preferredModels = [
-            'llama3-70b-8192',
-            'llama3-8b-8192',
+            'llama-3.3-70b-versatile',
+            'llama-3.1-8b-instant',
             'mixtral-8x7b-32768',
             'gemma2-9b-it'
         ];
@@ -49,10 +49,7 @@ CRITICAL INSTRUCTIONS:
                 });
 
                 replyText = completion.choices[0]?.message?.content;
-                if (replyText) {
-                    console.log(`Success with model: ${modelId}`);
-                    break;
-                }
+                if (replyText) break;
             } catch (err) {
                 console.log(`Failed with ${modelId}:`, err.message);
             }
