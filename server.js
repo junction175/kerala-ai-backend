@@ -26,17 +26,37 @@ CRITICAL INSTRUCTIONS:
    - Class 10 = പത്താം ക്ലാസ്സ്
 5. Strictly DO NOT use Hindi, Arabic, Bengali, or broken Malayalam.`;
 
-        // Groq-ലെ ഏറ്റവും മികച്ചതും സ്ഥിരവുമായ മോഡൽ ഡയറക്ട് വിളിക്കുന്നു
-        const completion = await groq.chat.completions.create({
-            model: 'llama-3.3-70b-versatile',
-            messages: [
-                { role: 'system', content: systemPrompt },
-                { role: 'user', content: `[Subject: ${subject || 'General'}, Level: ${level || 'High School'}] Student Question: ${question}` }
-            ],
-            temperature: 0.5,
-        });
+        // ഉറപ്പായും ലഭ്യമായ Groq ചാറ്റ് മോഡലുകൾ
+        const preferredModels = [
+            'llama-3.3-70b-versatile',
+            'llama-3.1-8b-instant',
+            'mixtral-8x7b-32768',
+            'gemma2-9b-it'
+        ];
 
-        const replyText = completion.choices[0]?.message?.content;
+        let replyText = null;
+
+        for (const modelId of preferredModels) {
+            try {
+                console.log(`Trying model: ${modelId}`);
+                const completion = await groq.chat.completions.create({
+                    model: modelId,
+                    messages: [
+                        { role: 'system', content: systemPrompt },
+                        { role: 'user', content: `[Subject: ${subject || 'General'}, Level: ${level || 'High School'}] Student Question: ${question}` }
+                    ],
+                    temperature: 0.5,
+                });
+
+                replyText = completion.choices[0]?.message?.content;
+                if (replyText) {
+                    console.log(`Success with: ${modelId}`);
+                    break;
+                }
+            } catch (err) {
+                console.log(`Model ${modelId} failed:`, err.message);
+            }
+        }
 
         if (replyText) {
             return res.json({ reply: replyText });
@@ -45,7 +65,7 @@ CRITICAL INSTRUCTIONS:
         }
 
     } catch (error) {
-        console.error("Server Error:", error);
+        console.error("Server Detailed Error:", error);
         return res.status(500).json({ error: "സെർവറിൽ തകരാർ സംഭവിച്ചു." });
     }
 });
