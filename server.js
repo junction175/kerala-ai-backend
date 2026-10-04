@@ -26,21 +26,31 @@ CRITICAL INSTRUCTIONS:
    - Class 10 = പത്താം ക്ലാസ്സ്
 5. Strictly DO NOT use Hindi, Arabic, Bengali, or broken Malayalam.`;
 
-        // Groq-ലെ നിലവിലെ ലൈവ് മോഡലുകൾ
-        const preferredModels = [
-            'llama-3.3-70b-versatile',
-            'llama-3.1-8b-instant',
-            'mixtral-8x7b-32768',
-            'gemma2-9b-it'
-        ];
+        // 1. Groq അക്കൗണ്ടിൽ ലഭ്യമായ എല്ലാ മോഡലുകളും ഫെച്ച് ചെയ്യുന്നു
+        const modelsList = await groq.models.list();
+
+        // 2. Chat ചെയ്യാൻ കഴിയുന്ന Llama / Mixtral മോഡലുകൾ മാത്രം ഫിൽട്ടർ ചെയ്യുന്നു
+        const chatModels = modelsList.data.filter(m => {
+            const id = m.id.toLowerCase();
+            return (id.includes('llama') || id.includes('mixtral') || id.includes('gemma')) &&
+                   !id.includes('whisper') &&
+                   !id.includes('guard') &&
+                   !id.includes('embed') &&
+                   !id.includes('vision') &&
+                   !id.includes('arabic');
+        });
+
+        if (chatModels.length === 0) {
+            return res.status(500).json({ error: "ചാറ്റിന് അനുയോജ്യമായ മോഡലുകളൊന്നും അക്കൗണ്ടിൽ കണ്ടെത്തിയില്ല." });
+        }
 
         let replyText = null;
 
-        for (const modelId of preferredModels) {
+        // 3. ലഭ്യമായ മോഡലുകളിൽ ഒന്നൊന്നായി ട്രൈ ചെയ്യുന്നു
+        for (const modelObj of chatModels) {
             try {
-                console.log(`Trying model: ${modelId}`);
                 const completion = await groq.chat.completions.create({
-                    model: modelId,
+                    model: modelObj.id,
                     messages: [
                         { role: 'system', content: systemPrompt },
                         { role: 'user', content: `[Subject: ${subject || 'General'}, Level: ${level || 'High School'}] Student Question: ${question}` }
@@ -51,7 +61,7 @@ CRITICAL INSTRUCTIONS:
                 replyText = completion.choices[0]?.message?.content;
                 if (replyText) break;
             } catch (err) {
-                console.log(`Failed with ${modelId}:`, err.message);
+                console.log(`Failed model ${modelObj.id}:`, err.message);
             }
         }
 
