@@ -10,67 +10,74 @@ app.use(express.json());
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 
 app.post('/api/teacher', async (req, res) => {
-  try {
-    const { question, subject, level } = req.body;
+    try {
+        const { question, subject, level } = req.body;
 
-    // 1. നിങ്ങളുടെ Groq അക്കൗണ്ടിലെ മോഡലുകൾ ഫെച്ച് ചെയ്യുന്നു
-    const modelsList = await groq.models.list();
-    
-    // 2. Chat സപ്പോർട്ട് ചെയ്യാത്ത Whisper, Guard, Classification മോഡലുകളെ മാറ്റിനിർത്തുന്നു
-    const chatModels = modelsList.data.filter(m => {
-      const id = m.id.toLowerCase();
-      return !id.includes('whisper') && 
-             !id.includes('guard') && 
-             !id.includes('embed') && 
-             !id.includes('vision');
-    });
+        // 1. Groq മോഡലുകൾ ഫെച്ച് ചെയ്യുന്നു
+        const modelsList = await groq.models.list();
 
-    if (chatModels.length === 0) {
-      return res.status(500).json({ error: "ചാറ്റിന് അനുയോജ്യമായ മോഡലുകളൊന്നും അക്കൗണ്ടിൽ കണ്ടെത്തിയില്ല." });
-    }
-
-    let replyText = null;
-    let lastError = null;
-
-    // 3. ഫിൽട്ടർ ചെയ്ത ചാറ്റ് മോഡലുകളിലേക്ക് ഒന്നൊന്നായി അയച്ചു നോക്കുന്നു
-    for (const modelObj of chatModels) {
-      try {
-        console.log(`Trying model: ${modelObj.id}`);
-        const completion = await groq.chat.completions.create({
-          messages: [
-            {
-              role: "system",
-              content: `You are Ma'am, an AI teacher teaching ${subject || 'General Studies'} for Class ${level || '+1'}. Teach step-by-step in clear Malayalam.`
-            },
-            {
-              role: "user",
-              content: question
-            }
-          ],
-          model: modelObj.id,
+        // 2. Chat സപ്പോർട്ട് ചെയ്യാത്ത മോഡലുകളെ മാറ്റിനിർത്തുന്നു
+        const chatModels = modelsList.data.filter(m => {
+            const id = m.id.toLowerCase();
+            return !id.includes('whisper') &&
+                   !id.includes('guard') &&
+                   !id.includes('embed') &&
+                   !id.includes('vision');
         });
 
-        replyText = completion.choices[0]?.message?.content;
-        if (replyText) {
-          console.log(`Success using model: ${modelObj.id}`);
-          break;
+        if (chatModels.length === 0) {
+            return res.status(500).json({ error: "ചാറ്റിന് അനുയോജ്യമായ മോഡലുകളൊന്നും അക്കൗണ്ടിൽ കണ്ടെത്തിയില്ല." });
         }
-      } catch (err) {
-        lastError = err.message;
-        console.log(`Model ${modelObj.id} failed: ${err.message}`);
-      }
-    }
 
-    if (replyText) {
-      res.json({ reply: replyText });
-    } else {
-      res.status(500).json({ error: lastError || "റിക്വസ്റ്റ് പ്രോസസ്സ് ചെയ്യാൻ സാധിച്ചില്ല." });
-    }
+        // 3. ശരിയായ മലയാളം നൽകാൻ സുദൃഢമായ System Prompt
+        const systemPrompt = `You are Lakshmi Ma'am, a warm, supportive, and highly clear Malayalam High School Science teacher.
 
-  } catch (e) {
-    console.error("SERVER ERROR:", e.message);
-    res.status(500).json({ error: e.message });
-  }
+STRICT LANGUAGE RULES:
+1. Speak natural, proper Malayalam mixed with standard English educational terms.
+2. ALWAYS use pure Malayalam words for subjects and terms:
+   - Biology = ജീവശാസ്ത്രം (Do NOT use Bainya or other languages)
+   - Class 10 = പത്താം ക്ലാസ്സ്
+   - Life Processes = ജീവൽപ്രക്രിയകൾ (Life Processes)
+   - Control and Coordination = നിയന്ത്രണവും ഏകോപനവും
+   - Heredity and Evolution = പാരമ്പര്യവും പരിണാമവും
+3. Avoid Hindi/Bengali transliterations or strange broken phrases like "Om Namaskar", "Bainya", or "Jiwananm".
+4. Address the student in a friendly, respectful teacher tone using natural Malayalam.`;
+
+        let replyText = null;
+        let lastError = null;
+
+        // 4. മോഡലുകൾ ട്രൈ ചെയ്യുന്നു
+        for (const modelObj of chatModels) {
+            try {
+                const completion = await groq.chat.completions.create({
+                    model: modelObj.id,
+                    messages: [
+                        { role: 'system', content: systemPrompt },
+                        { role: 'user', content: `[Subject: ${subject || 'General'}, Level: ${level || 'High School'}] User Question: ${question}` }
+                    ],
+                    temperature: 0.6,
+                });
+
+                replyText = completion.choices[0]?.message?.content;
+                if (replyText) break; 
+            } catch (err) {
+                lastError = err;
+            }
+        }
+
+        if (replyText) {
+            return res.json({ reply: replyText });
+        } else {
+            return res.status(500).json({ error: "മറുപടി ലഭ്യമായില്ല. ദയവായി വീണ്ടും ശ്രമിക്കുക." });
+        }
+
+    } catch (error) {
+        console.error("Server Error:", error);
+        return res.status(500).json({ error: "സെർവറിൽ തകരാർ സംഭവിച്ചു." });
+    }
 });
 
-app.listen(3000, () => console.log('Kerala AI Teacher running at http://localhost:3000'));
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+    console.log(`Server is running on port ${PORT}`);
+});
