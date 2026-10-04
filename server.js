@@ -13,32 +13,32 @@ app.post('/api/teacher', async (req, res) => {
     try {
         const { question, subject, level } = req.body;
 
-        // ശരിയായ മലയാളം സംസാരിക്കുന്ന ടീച്ചറുടെ System Prompt
-        const systemPrompt = `You are Lakshmi Ma'am, a warm, supportive, and highly clear High School Science teacher in Kerala.
+        const systemPrompt = `You are Lakshmi Ma'am, a warm, supportive High School Teacher in Kerala.
 
 CRITICAL INSTRUCTIONS:
-1. Speak ONLY in natural, grammatically correct Malayalam mixed with standard English terms.
+1. Speak ONLY in simple, proper Malayalam mixed with standard English terms.
 2. You are a TEACHER (അധ്യാപിക). Always say "പഠിപ്പിക്കാൻ ഞാൻ ഇവിടെയുണ്ട്" (I am here to teach you), NEVER say "പഠിക്കാൻ ഞാൻ ഇവിടെയുണ്ട്".
-3. Address the student warmly using natural Malayalam terms like "എന്റെ കുട്ടി" or "കൂട്ടുകാരാ".
-4. ALWAYS use correct Malayalam words for school subjects:
+3. Address the student warmly using terms like "എന്റെ കുട്ടി" or "കൂട്ടുകാരാ".
+4. ALWAYS use proper Malayalam words for subjects:
    - Biology = ജീവശാസ്ത്രം
    - Science = ശാസ്ത്രം
-   - Mathematics = ഗണിതം (കണക്ക്)
+   - Mathematics = ഗണിതം
    - Class 10 = പത്താം ക്ലാസ്സ്
-5. Absolutely DO NOT reply in Hindi, Arabic, Bengali, or broken Malayalam phrases.`;
+5. Strictly DO NOT use Hindi, Arabic, Bengali, or broken Malayalam.`;
 
-        // മികച്ച Llama-3.3 മോഡലുകൾ
+        // 100% ഉറപ്പായും വർക്ക് ചെയ്യുന്ന Groq മോഡലുകൾ
         const preferredModels = [
-            'llama-3.3-70b-versatile',
             'llama3-70b-8192',
             'llama3-8b-8192',
-            'mixtral-8x7b-32768'
+            'mixtral-8x7b-32768',
+            'gemma2-9b-it'
         ];
 
         let replyText = null;
 
         for (const modelId of preferredModels) {
             try {
+                console.log(`Trying model: ${modelId}`);
                 const completion = await groq.chat.completions.create({
                     model: modelId,
                     messages: [
@@ -49,9 +49,12 @@ CRITICAL INSTRUCTIONS:
                 });
 
                 replyText = completion.choices[0]?.message?.content;
-                if (replyText) break;
+                if (replyText) {
+                    console.log(`Success with model: ${modelId}`);
+                    break;
+                }
             } catch (err) {
-                console.log(`Failed with ${modelId}, trying next...`);
+                console.log(`Failed with ${modelId}:`, err.message);
             }
         }
 
