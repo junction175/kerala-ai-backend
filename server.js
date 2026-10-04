@@ -26,44 +26,17 @@ CRITICAL INSTRUCTIONS:
    - Class 10 = പത്താം ക്ലാസ്സ്
 5. Strictly DO NOT use Hindi, Arabic, Bengali, or broken Malayalam.`;
 
-        // 1. Groq അക്കൗണ്ടിൽ ലഭ്യമായ എല്ലാ മോഡലുകളും ഫെച്ച് ചെയ്യുന്നു
-        const modelsList = await groq.models.list();
-
-        // 2. Chat ചെയ്യാൻ കഴിയുന്ന Llama / Mixtral മോഡലുകൾ മാത്രം ഫിൽട്ടർ ചെയ്യുന്നു
-        const chatModels = modelsList.data.filter(m => {
-            const id = m.id.toLowerCase();
-            return (id.includes('llama') || id.includes('mixtral') || id.includes('gemma')) &&
-                   !id.includes('whisper') &&
-                   !id.includes('guard') &&
-                   !id.includes('embed') &&
-                   !id.includes('vision') &&
-                   !id.includes('arabic');
+        // Groq-ലെ ഏറ്റവും മികച്ചതും സ്ഥിരവുമായ മോഡൽ ഡയറക്ട് വിളിക്കുന്നു
+        const completion = await groq.chat.completions.create({
+            model: 'llama-3.3-70b-versatile',
+            messages: [
+                { role: 'system', content: systemPrompt },
+                { role: 'user', content: `[Subject: ${subject || 'General'}, Level: ${level || 'High School'}] Student Question: ${question}` }
+            ],
+            temperature: 0.5,
         });
 
-        if (chatModels.length === 0) {
-            return res.status(500).json({ error: "ചാറ്റിന് അനുയോജ്യമായ മോഡലുകളൊന്നും അക്കൗണ്ടിൽ കണ്ടെത്തിയില്ല." });
-        }
-
-        let replyText = null;
-
-        // 3. ലഭ്യമായ മോഡലുകളിൽ ഒന്നൊന്നായി ട്രൈ ചെയ്യുന്നു
-        for (const modelObj of chatModels) {
-            try {
-                const completion = await groq.chat.completions.create({
-                    model: modelObj.id,
-                    messages: [
-                        { role: 'system', content: systemPrompt },
-                        { role: 'user', content: `[Subject: ${subject || 'General'}, Level: ${level || 'High School'}] Student Question: ${question}` }
-                    ],
-                    temperature: 0.5,
-                });
-
-                replyText = completion.choices[0]?.message?.content;
-                if (replyText) break;
-            } catch (err) {
-                console.log(`Failed model ${modelObj.id}:`, err.message);
-            }
-        }
+        const replyText = completion.choices[0]?.message?.content;
 
         if (replyText) {
             return res.json({ reply: replyText });
