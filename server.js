@@ -13,55 +13,44 @@ app.post('/api/teacher', async (req, res) => {
     try {
         const { question, subject, level } = req.body;
 
-        // 1. Groq മോഡലുകൾ ഫെച്ച് ചെയ്യുന്നു
-        const modelsList = await groq.models.list();
+        // ശരിയായ മലയാളം മാത്രം നൽകാനുള്ള പക്കാ System Prompt
+        const systemPrompt = `You are Lakshmi Ma'am, a warm, supportive, and clear Malayalam High School teacher.
 
-        // 2. Chat സപ്പോർട്ട് ചെയ്യാത്ത മോഡലുകളെ മാറ്റിനിർത്തുന്നു
-        const chatModels = modelsList.data.filter(m => {
-            const id = m.id.toLowerCase();
-            return !id.includes('whisper') &&
-                   !id.includes('guard') &&
-                   !id.includes('embed') &&
-                   !id.includes('vision');
-        });
-
-        if (chatModels.length === 0) {
-            return res.status(500).json({ error: "ചാറ്റിന് അനുയോജ്യമായ മോഡലുകളൊന്നും അക്കൗണ്ടിൽ കണ്ടെത്തിയില്ല." });
-        }
-
-        // 3. ശരിയായ മലയാളം നൽകാൻ സുദൃഢമായ System Prompt
-        const systemPrompt = `You are Lakshmi Ma'am, a warm, supportive, and highly clear Malayalam High School Science teacher.
-
-STRICT LANGUAGE RULES:
-1. Speak natural, proper Malayalam mixed with standard English educational terms.
-2. ALWAYS use pure Malayalam words for subjects and terms:
-   - Biology = ജീവശാസ്ത്രം (Do NOT use Bainya or other languages)
+CRITICAL INSTRUCTIONS:
+1. Speak ONLY in simple, natural Malayalam mixed with standard English educational terms.
+2. Absolutely DO NOT reply in Arabic, Hindi, Bengali, or any language other than Malayalam.
+3. ALWAYS use proper Malayalam for subjects:
+   - Mathematics = ഗണിതം (Kanakku)
+   - Science = ശാസ്ത്രം
+   - Biology = ജീവശാസ്ത്രം
    - Class 10 = പത്താം ക്ലാസ്സ്
-   - Life Processes = ജീവൽപ്രക്രിയകൾ (Life Processes)
-   - Control and Coordination = നിയന്ത്രണവും ഏകോപനവും
-   - Heredity and Evolution = പാരമ്പര്യവും പരിണാമവും
-3. Avoid Hindi/Bengali transliterations or strange broken phrases like "Om Namaskar", "Bainya", or "Jiwananm".
-4. Address the student in a friendly, respectful teacher tone using natural Malayalam.`;
+4. Keep replies friendly, encouraging, and easy to understand for high school students.`;
+
+        // പക്കാ ക്വാളിറ്റിയുള്ള Llama-3.3 മോഡലുകൾ മുൻഗണനാക്രമത്തിൽ
+        const preferredModels = [
+            'llama-3.3-70b-versatile',
+            'llama3-70b-8192',
+            'llama3-8b-8192',
+            'mixtral-8x7b-32768'
+        ];
 
         let replyText = null;
-        let lastError = null;
 
-        // 4. മോഡലുകൾ ട്രൈ ചെയ്യുന്നു
-        for (const modelObj of chatModels) {
+        for (const modelId of preferredModels) {
             try {
                 const completion = await groq.chat.completions.create({
-                    model: modelObj.id,
+                    model: modelId,
                     messages: [
                         { role: 'system', content: systemPrompt },
-                        { role: 'user', content: `[Subject: ${subject || 'General'}, Level: ${level || 'High School'}] User Question: ${question}` }
+                        { role: 'user', content: `[Subject: ${subject || 'General'}, Level: ${level || 'High School'}] Student Question: ${question}` }
                     ],
-                    temperature: 0.6,
+                    temperature: 0.5,
                 });
 
                 replyText = completion.choices[0]?.message?.content;
-                if (replyText) break; 
+                if (replyText) break;
             } catch (err) {
-                lastError = err;
+                console.log(`Failed with ${modelId}, trying next...`);
             }
         }
 
